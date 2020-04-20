@@ -1,0 +1,10 @@
+#ifndef __CONFIGURE_CILKPLUS_H
+#define __CONFIGURE_CILKPLUS_H
+
+/* Remote Memory Spaces */
+#cmakedefine KOKKOS_ENABLE_CILKPLUS
+#cmakedefine KOKKOS_ENABLE_EMU
+#cmakedefine KOKKOS_ENABLE_EMU_X86
+#cmakedefine KOKKOS_CILK_USE_PARALLEL_FOR
+
+#endif // __CONFIGURE_CILKPLUS_H
