@@ -46,7 +46,7 @@
 
 #include <gtest/gtest.h>
 
-#if defined(KOKKOS_EMU_X86)
+#if defined(KOKKOS_EMU_X86) || !defined(KOKKOS_ENABLE_EMU)
    namespace Test {
 
       class cilkplus : public ::testing::Test {

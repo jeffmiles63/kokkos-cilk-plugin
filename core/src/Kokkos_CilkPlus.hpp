@@ -148,18 +148,18 @@ public:
      //cilk_sync;
   }
 
-  static void initialize( unsigned threads_count = 1 ,
+  static void impl_initialize( unsigned threads_count = 1 ,
                           unsigned use_numa_count = 0 ,
                           unsigned use_cores_per_numa = 0 ,
                           bool allow_asynchronous_threadpool = false);
 
-  static bool is_initialized();
+  static bool impl_is_initialized();
 
   /** \brief  Return the maximum amount of concurrency.  */
   static int concurrency() {return 1;};
 
   //! Free any resources being consumed by the device.
-  static void finalize();
+  static void impl_finalize();
 
   //! Print configuration information to the given output stream.
   static void print_configuration( std::ostream & , const bool /* detail */ = false ) {}
@@ -176,10 +176,21 @@ public:
 
   static const char* name();
 
+  uint32_t impl_instance_id() const noexcept { return 0; }
   //--------------------------------------------------------------------------
 };
 }
+namespace Profiling {
+namespace Experimental {
+template <>
+struct DeviceTypeTraits<Kokkos::Experimental::CilkPlus> {
+  static constexpr Kokkos::Profiling::Experimental::DeviceType id = 
+          Kokkos::Profiling::Experimental::DeviceType::Unknown;
+};
+}  // namespace Experimental
+}  // namespace Profiling
 } // namespace Kokkos
+
 
 /*--------------------------------------------------------------------------*/
 /*--------------------------------------------------------------------------*/
@@ -219,12 +230,12 @@ namespace Kokkos {
 namespace Impl {
 
 // Resize thread team data scratch memory
-void serial_resize_thread_team_data( size_t pool_reduce_bytes
+void cilkplus_resize_thread_team_data( size_t pool_reduce_bytes
                                    , size_t team_reduce_bytes
                                    , size_t team_shared_bytes
                                    , size_t thread_local_bytes );
 
-HostThreadTeamData * serial_get_thread_team_data();
+HostThreadTeamData * cilkplus_get_thread_team_data();
 
 } /* namespace Impl */
 } /* namespace Kokkos */
@@ -330,57 +341,53 @@ public:
   inline int chunk_size() const { return m_chunk_size ; }
 
   /** \brief set chunk_size to a discrete value*/
-  inline TeamPolicyInternal set_chunk_size(typename traits::index_type chunk_size_) const {
-    TeamPolicyInternal p = *this;
-    p.m_chunk_size = chunk_size_;
-    return p;
+  inline TeamPolicyInternal & set_chunk_size(typename traits::index_type chunk_size_) {
+    m_chunk_size = chunk_size_;
+    return *this;
   }
 
   /** \brief set per team scratch size for a specific level of the scratch hierarchy */
-  inline TeamPolicyInternal set_scratch_size(const int& level, const PerTeamValue& per_team) const {
-    TeamPolicyInternal p = *this;
-    p.m_team_scratch_size[level] = per_team.value;
-    return p;
+  inline TeamPolicyInternal & set_scratch_size(const int& level, const PerTeamValue& per_team) {
+    m_team_scratch_size[level] = per_team.value;
+    return *this;
   };
 
   /** \brief set per thread scratch size for a specific level of the scratch hierarchy */
-  inline TeamPolicyInternal set_scratch_size(const int& level, const PerThreadValue& per_thread) const {
-    TeamPolicyInternal p = *this;
-    p.m_thread_scratch_size[level] = per_thread.value;
-    return p;
+  inline TeamPolicyInternal & set_scratch_size(const int& level, const PerThreadValue& per_thread) {
+    m_thread_scratch_size[level] = per_thread.value;
+    return *this;
   };
 
   /** \brief set per thread and per team scratch size for a specific level of the scratch hierarchy */
-  inline TeamPolicyInternal set_scratch_size(const int& level, const PerTeamValue& per_team, const PerThreadValue& per_thread) const {
-    TeamPolicyInternal p = *this;
-    p.m_team_scratch_size[level] = per_team.value;
-    p.m_thread_scratch_size[level] = per_thread.value;
-    return p;
+  inline TeamPolicyInternal & set_scratch_size(const int& level, const PerTeamValue& per_team, const PerThreadValue& per_thread) {
+    m_team_scratch_size[level] = per_team.value;
+    m_thread_scratch_size[level] = per_thread.value;
+    return *this;
   };
 
   typedef Impl::HostThreadTeamMember< Kokkos::Experimental::CilkPlus >  member_type ;
 
 protected:
   /** \brief set chunk_size to a discrete value*/
-  inline TeamPolicyInternal internal_set_chunk_size(typename traits::index_type chunk_size_) {
+  inline TeamPolicyInternal & internal_set_chunk_size(typename traits::index_type chunk_size_) {
     m_chunk_size = chunk_size_;
     return *this;
   }
 
   /** \brief set per team scratch size for a specific level of the scratch hierarchy */
-  inline TeamPolicyInternal internal_set_scratch_size(const int& level, const PerTeamValue& per_team) {
+  inline TeamPolicyInternal & internal_set_scratch_size(const int& level, const PerTeamValue& per_team) {
     m_team_scratch_size[level] = per_team.value;
     return *this;
   };
 
   /** \brief set per thread scratch size for a specific level of the scratch hierarchy */
-  inline TeamPolicyInternal internal_set_scratch_size(const int& level, const PerThreadValue& per_thread) {
+  inline TeamPolicyInternal & internal_set_scratch_size(const int& level, const PerThreadValue& per_thread) {
     m_thread_scratch_size[level] = per_thread.value;
     return *this;
   };
 
   /** \brief set per thread and per team scratch size for a specific level of the scratch hierarchy */
-  inline TeamPolicyInternal internal_set_scratch_size(const int& level, const PerTeamValue& per_team, const PerThreadValue& per_thread) {
+  inline TeamPolicyInternal & internal_set_scratch_size(const int& level, const PerTeamValue& per_team, const PerThreadValue& per_thread) {
     m_team_scratch_size[level] = per_team.value;
     m_thread_scratch_size[level] = per_thread.value;
     return *this;
@@ -454,12 +461,12 @@ public:
       const size_t team_shared_size  = 0 ; // Never shrinks
       const size_t thread_local_size = 0 ; // Never shrinks
 
-      serial_resize_thread_team_data( pool_reduce_size
+      cilkplus_resize_thread_team_data( pool_reduce_size
                                     , team_reduce_size
                                     , team_shared_size
                                     , thread_local_size );
 
-      HostThreadTeamData & data = *serial_get_thread_team_data();
+      HostThreadTeamData & data = *cilkplus_get_thread_team_data();
 
       reference_type update =
         ValueInit::init( m_functor , pointer_type(data.pool_reduce_local()) );
@@ -536,12 +543,12 @@ public:
       const size_t team_shared_size  = m_shared ;
       const size_t thread_local_size = 0 ; // Never shrinks
 
-      serial_resize_thread_team_data( pool_reduce_size
+      cilkplus_resize_thread_team_data( pool_reduce_size
                                     , team_reduce_size
                                     , team_shared_size
                                     , thread_local_size );
 
-      HostThreadTeamData & data = *serial_get_thread_team_data();
+      HostThreadTeamData & data = *cilkplus_get_thread_team_data();
 
       this->template exec< typename Policy::work_tag >( data );
     }
@@ -625,13 +632,13 @@ public:
       const size_t team_shared_size  = m_shared ;
       const size_t thread_local_size = 0 ; // Never shrinks
 
-      serial_resize_thread_team_data( pool_reduce_size
+      cilkplus_resize_thread_team_data( pool_reduce_size
                                     , team_reduce_size
                                     , team_shared_size
                                     , thread_local_size );
 
 
-      HostThreadTeamData & data = *serial_get_thread_team_data();
+      HostThreadTeamData & data = *cilkplus_get_thread_team_data();
 
       pointer_type ptr =
         m_result_ptr ? m_result_ptr : pointer_type(data.pool_reduce_local());
