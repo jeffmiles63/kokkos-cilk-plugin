@@ -231,6 +231,7 @@ struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::ena
 
     typedef CilkReduceContainer< typename Kokkos::Impl::if_c< Kokkos::is_view<ReducerType>::value, Functor, ReducerType>::type, WorkTagFwd > reduce_container;
     typedef Kokkos::Impl::FunctorValueJoin< typename Kokkos::Impl::if_c< Kokkos::is_view<ReducerType>::value, Functor, ReducerType>::type, WorkTagFwd >   ValueJoin;
+    typedef ReducerType ReducerTypeFwd;
     CILK_C_DECLARE_REDUCER( reduce_container ) kr;
 
     const ReducerType f;
@@ -301,6 +302,7 @@ struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::ena
 
     typedef CilkReduceContainer< ReducerType, WorkTagFwd > reduce_container;
     typedef Kokkos::Impl::FunctorValueJoin< Functor, WorkTagFwd >   ValueJoin;
+    typedef Functor ReducerTypeFwd;
     CILK_C_DECLARE_REDUCER( reduce_container ) kr;
 
     const Functor f;
@@ -360,6 +362,7 @@ struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::ena
 
     typedef CilkReduceContainer< ReducerType, WorkTagFwd > reduce_container;
     typedef Kokkos::Impl::FunctorValueJoin< Functor, WorkTagFwd >   ValueJoin;
+    typedef Functor ReducerTypeFwd;
     CILK_C_DECLARE_REDUCER( reduce_container ) kr;
     /*
      *   {hyperObject, ReducerType}
