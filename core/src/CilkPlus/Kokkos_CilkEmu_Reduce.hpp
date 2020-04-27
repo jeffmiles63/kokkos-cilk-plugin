@@ -577,8 +577,8 @@ struct kokkos_cilk_reducer< ReducerType, Functor, defaultType, WorkTagFwd , type
 template <typename ReducerType, class Functor, class defaultType, class WorkTagFwd >
 struct kokkos_cilk_reducer< ReducerType, Functor, defaultType, WorkTagFwd , typename std::enable_if< !Kokkos::is_reducer_type<ReducerType>::value &&
                                                                            !Kokkos::is_view<ReducerType>::value &&
-                                           ( std::is_array< typename Functor::value_type >::value || 
-                                             std::is_pointer< typename Functor::value_type >::value ) >::type > {
+                                           ( std::is_array< defaultType >::value || 
+                                             std::is_pointer< defaultType >::value ) >::type > {
 
     typedef CilkReduceContainer< kokkos_cilk_reducer, Functor, WorkTagFwd > reduce_container;
     typedef cilk::reducer < reduce_container > local_reducer_type;
@@ -633,7 +633,7 @@ struct kokkos_cilk_reducer< ReducerType, Functor, defaultType, WorkTagFwd , type
     }
     
     static typename reduce_container::rd_value_type default_value() {
-        typename Functor::value_type lVal;
+        defaultType lVal;
         Functor f_;
         ValueInit::init( f_, &lVal );
         return static_cast<typename reduce_container::rd_value_type>(lVal);
@@ -646,8 +646,8 @@ struct kokkos_cilk_reducer< ReducerType, Functor, defaultType, WorkTagFwd , type
 template <typename ReducerType, class Functor, class defaultType, class WorkTagFwd >
 struct kokkos_cilk_reducer< ReducerType, Functor, defaultType, WorkTagFwd , typename std::enable_if< !Kokkos::is_reducer_type<ReducerType>::value &&
                                                                            !Kokkos::is_view<ReducerType>::value &&
-                                           ( !std::is_array< typename Functor::value_type >::value &&
-                                             !std::is_pointer< typename Functor::value_type >::value ) >::type >   {
+                                           ( !std::is_array< defaultType >::value &&
+                                             !std::is_pointer< defaultType ) >::type >   {
 
     typedef CilkReduceContainer< kokkos_cilk_reducer, ReducerType, WorkTagFwd > reduce_container;
     typedef cilk::reducer < reduce_container > local_reducer_type;
@@ -666,31 +666,31 @@ struct kokkos_cilk_reducer< ReducerType, Functor, defaultType, WorkTagFwd , type
                                                                            f(f_), r(f_), alloc_bytes(l_alloc_bytes),
                                                                            local_reducer(reinterpret_cast<local_reducer_type *>(ptr_reducer)),
                                                                            global_reducer(gr_) {
-		typename Functor::value_type  test_val;
+		defaultType  test_val;
 		update_value(test_val);
 		//printf("[%d] cilk reducer (with functor) init val = %d \n", id, test_val);
 		//fflush(stdout);
     }
 
-   void init( typename Functor::value_type & ret ) {
+   void init( defaultType & ret ) {
         typename reduce_container::ViewType * cont = local_reducer->view();
         cont->identity( global_reducer, m_id, &ret );
    }
 
-   void join(typename Functor::value_type & val_) {
+   void join(defaultType & val_) {
         typename reduce_container::ViewType * cont = local_reducer->view();
         cont->join( global_reducer, m_id, val_ );
     }
     
-    void update_value(typename Functor::value_type & ret) {
+    void update_value(defaultType & ret) {
         ret = local_reducer->get_value();
     }
 
     void release_resources() {
     }
     
-    static typename Functor::value_type default_value () {
-        typename Functor::value_type lVal;
+    static defaultType default_value () {
+        defaultType lVal;
         Functor f_;
         ValueInit::init( f_, &lVal );
         return lVal;

@@ -166,13 +166,13 @@ public:
 
   //--------------------------------------------------------------------------
 
-  inline static int thread_pool_size( int = 0 ) { return 1 ; }
-  KOKKOS_INLINE_FUNCTION static int thread_pool_rank() { return 0 ; }
+  inline static int impl_thread_pool_size( int = 0 ) { return 1 ; }
+  KOKKOS_INLINE_FUNCTION static int impl_thread_pool_rank() { return 0 ; }
 
   //--------------------------------------------------------------------------
 
-  KOKKOS_INLINE_FUNCTION static unsigned hardware_thread_id() { return thread_pool_rank(); }
-  inline static unsigned max_hardware_threads() { return thread_pool_size(0); }
+  KOKKOS_INLINE_FUNCTION static unsigned impl_hardware_thread_id() { return impl_thread_pool_rank(); }
+  inline static unsigned impl_max_hardware_threads() { return impl_thread_pool_size(0); }
 
   static const char* name();
 

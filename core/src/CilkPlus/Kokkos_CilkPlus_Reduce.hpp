@@ -9,13 +9,13 @@
 namespace Kokkos {
 namespace Impl {
 
-template <class ReducerType, class WorkTagFwd, class T = void>
+template <class ReducerType, class WorkTagFwd, class ValueType, class T = void>
 struct CilkReduceContainer;
 
 
 // Value only
-template <class ReducerType, class WorkTagFwd>
-struct CilkReduceContainer<ReducerType, WorkTagFwd, typename std::enable_if< Kokkos::is_reducer_type<ReducerType>::value ||
+template <class ReducerType, class WorkTagFwd, class ValueType>
+struct CilkReduceContainer<ReducerType, WorkTagFwd, ValueType, typename std::enable_if< Kokkos::is_reducer_type<ReducerType>::value ||
                                                                  Kokkos::is_view<ReducerType>::value>::type >
 {
   Kokkos::HostSpace space;
@@ -78,16 +78,16 @@ struct CilkReduceContainer<ReducerType, WorkTagFwd, typename std::enable_if< Kok
 
 };
 
-template <class ReducerType, class WorkTagFwd>
-struct CilkReduceContainer<ReducerType, WorkTagFwd, typename std::enable_if< !Kokkos::is_reducer_type<ReducerType>::value &&
+template <class ReducerType, class WorkTagFwd, class ValueType>
+struct CilkReduceContainer<ReducerType, WorkTagFwd, ValueType, typename std::enable_if< !Kokkos::is_reducer_type<ReducerType>::value &&
                                              !Kokkos::is_view<ReducerType>::value && 
-                                           ( std::is_array< typename ReducerType::value_type >::value || 
-                                             std::is_pointer< typename ReducerType::value_type >::value ) >::type >   {
+                                           ( std::is_array< ValueType >::value || 
+                                             std::is_pointer< ValueType >::value ) >::type >   {
 
   enum { isPointer = 1 };
 
   Kokkos::HostSpace space;
-  typedef typename std::remove_reference<typename ReducerType::value_type>::type nr_value_type;
+  typedef typename std::remove_reference<ValueType>::type nr_value_type;
   typedef typename std::remove_pointer<nr_value_type>::type np_value_type;
   typedef typename std::remove_extent<np_value_type>::type ne_value_type;
   typedef typename std::remove_const<ne_value_type>::type rd_value_type; 
@@ -138,14 +138,14 @@ struct CilkReduceContainer<ReducerType, WorkTagFwd, typename std::enable_if< !Ko
 
 };
 
-template <class ReducerType, class WorkTagFwd>
-struct CilkReduceContainer<ReducerType, WorkTagFwd, typename std::enable_if< !Kokkos::is_reducer_type<ReducerType>::value &&
+template <class ReducerType, class WorkTagFwd, class ValueType>
+struct CilkReduceContainer<ReducerType, WorkTagFwd, ValueType, typename std::enable_if< !Kokkos::is_reducer_type<ReducerType>::value &&
                                              !Kokkos::is_view<ReducerType>::value && 
-                                           ( !std::is_array< typename ReducerType::value_type >::value && 
-                                             !std::is_pointer< typename ReducerType::value_type >::value ) >::type >   {
+                                           ( !std::is_array< ValueType >::value && 
+                                             !std::is_pointer< ValueType >::value ) >::type >   {
 
   enum { isPointer = 0 };
-  typedef typename std::remove_reference<typename ReducerType::value_type>::type nr_value_type;
+  typedef typename std::remove_reference<ValueType>::type nr_value_type;
   typedef typename std::remove_pointer<nr_value_type>::type np_value_type;
   typedef typename std::remove_const<np_value_type>::type rd_value_type; 
   typedef Kokkos::Impl::FunctorValueJoin< ReducerType, WorkTagFwd >   ValueJoin;
@@ -175,7 +175,7 @@ struct CilkReduceContainer<ReducerType, WorkTagFwd, typename std::enable_if< !Ko
      return val;
   }
 
-  void join( const ReducerType & f, const typename ReducerType::value_type val_ )
+  void join( const ReducerType & f, const ValueType val_ )
   {
      ValueJoin::join( f, &val, &val_ );
   }
@@ -221,15 +221,15 @@ void value_dealloc ( void * reducer, void * data )
    }
 }
 
-template <typename ReducerType, class Functor, class WorkTagFwd , class T = void>
+template <typename ReducerType, class Functor, class defaultType, class WorkTagFwd , class T = void>
 struct kokkos_cilk_reducer;
 
-template <typename ReducerType, class Functor, class WorkTagFwd >
-struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::enable_if< 
+template <typename ReducerType, class Functor, class defaultType, class WorkTagFwd >
+struct kokkos_cilk_reducer< ReducerType, Functor, defaultType, WorkTagFwd , typename std::enable_if< 
                                                      Kokkos::is_reducer_type<ReducerType>::value ||
                                                      Kokkos::is_view<ReducerType>::value>::type > {
 
-    typedef CilkReduceContainer< typename Kokkos::Impl::if_c< Kokkos::is_view<ReducerType>::value, Functor, ReducerType>::type, WorkTagFwd > reduce_container;
+    typedef CilkReduceContainer< typename Kokkos::Impl::if_c< Kokkos::is_view<ReducerType>::value, Functor, ReducerType>::type, WorkTagFwd, defaultType > reduce_container;
     typedef Kokkos::Impl::FunctorValueJoin< typename Kokkos::Impl::if_c< Kokkos::is_view<ReducerType>::value, Functor, ReducerType>::type, WorkTagFwd >   ValueJoin;
     typedef ReducerType ReducerTypeFwd;
     CILK_C_DECLARE_REDUCER( reduce_container ) kr;
@@ -294,17 +294,17 @@ struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::ena
 };
 
 
-template <typename ReducerType, class Functor, class WorkTagFwd >
-struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::enable_if< !Kokkos::is_reducer_type<ReducerType>::value &&
-                                                                           !Kokkos::is_view<ReducerType>::value &&
-                                           ( std::is_array< typename Functor::value_type >::value || 
-                                             std::is_pointer< typename Functor::value_type >::value ) >::type > {
+template <typename ReducerType, class Functor, class defaultType, class WorkTagFwd >
+struct kokkos_cilk_reducer< ReducerType, Functor, defaultType, WorkTagFwd , typename std::enable_if< ( ( !Kokkos::is_reducer_type<ReducerType>::value &&
+                                                                           !Kokkos::is_view<ReducerType>::value ) &&
+                                           ( std::is_array< defaultType >::value || 
+                                             std::is_pointer< defaultType >::value ) ) >::type > {
 
-    typedef CilkReduceContainer< ReducerType, WorkTagFwd > reduce_container;
+    typedef CilkReduceContainer< ReducerType, WorkTagFwd, defaultType > reduce_container;
     typedef Kokkos::Impl::FunctorValueJoin< Functor, WorkTagFwd >   ValueJoin;
     typedef Functor ReducerTypeFwd;
     CILK_C_DECLARE_REDUCER( reduce_container ) kr;
-
+    typedef defaultType value_type;
     const Functor f;
     const size_t alloc_bytes;
 
@@ -328,7 +328,7 @@ struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::ena
          CILK_C_REGISTER_REDUCER(kr);
     }
 
-    void join(typename Functor::value_type val_) {
+    void join(value_type val_) {
         reduce_container * cont = &REDUCER_VIEW(kr);
         ValueJoin::join( f, cont->getReference(), val_ );
     }
@@ -339,7 +339,7 @@ struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::ena
 
     }
 
-    void update_value(typename Functor::value_type ret) {
+    void update_value(value_type ret) {
        reduce_container * cont = &REDUCER_VIEW(kr);
        cont->getValue(ret);
        //long* trythis = (long*)(ret);
@@ -354,15 +354,16 @@ struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::ena
 
 };
 
-template <typename ReducerType, class Functor, class WorkTagFwd >
-struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::enable_if< !Kokkos::is_reducer_type<ReducerType>::value &&
-                                                                           !Kokkos::is_view<ReducerType>::value &&
-                                           ( !std::is_array< typename Functor::value_type >::value &&
-                                             !std::is_pointer< typename Functor::value_type >::value ) >::type >   {
+template <typename ReducerType, class Functor, class defaultType, class WorkTagFwd >
+struct kokkos_cilk_reducer< ReducerType, Functor, defaultType, WorkTagFwd , typename std::enable_if< ( (!Kokkos::is_reducer_type<ReducerType>::value &&
+                                                                           !Kokkos::is_view<ReducerType>::value ) &&
+                                           ( !std::is_array< defaultType >::value &&
+                                             !std::is_pointer< defaultType >::value ) ) >::type >   {
 
-    typedef CilkReduceContainer< ReducerType, WorkTagFwd > reduce_container;
+    typedef CilkReduceContainer< ReducerType, WorkTagFwd, defaultType > reduce_container;
     typedef Kokkos::Impl::FunctorValueJoin< Functor, WorkTagFwd >   ValueJoin;
     typedef Functor ReducerTypeFwd;
+    typedef defaultType value_type;
     CILK_C_DECLARE_REDUCER( reduce_container ) kr;
     /*
      *   {hyperObject, ReducerType}
@@ -391,19 +392,19 @@ struct kokkos_cilk_reducer< ReducerType, Functor, WorkTagFwd , typename std::ena
          CILK_C_REGISTER_REDUCER(kr);
     }
 
-   void join(typename Functor::value_type & val_) {
+   void join(value_type & val_) {
         reduce_container * cont = &REDUCER_VIEW(kr);
         cont->join( f, val_ );
     }
 
     void reduce(reduce_container* left, reduce_container* right ) {
-      typename Functor::value_type val_;
+      value_type val_;
       right->getValue(val_);
       left->join( f, val_ );
 
     }
     
-    void update_value(typename Functor::value_type & ret) {
+    void update_value(value_type & ret) {
         reduce_container * cont = &REDUCER_VIEW(kr);
         cont->getValue(ret);
     }

@@ -8,6 +8,8 @@
    #include<CilkPlus/Kokkos_CilkEmu_Reduce.hpp>
    #include <emu_c_utils/emu_c_utils.h>
 #else
+   // use cilk_for
+   #define KOKKOS_CILK_USE_PARALLEL_FOR
    #include<CilkPlus/Kokkos_CilkPlus_Reduce.hpp>
 #endif
 //Replace specific Emu headers with the tools header to allow x86 compilation
@@ -96,7 +98,6 @@ private:
 		   }
          }
        }
-       cilk_sync;
 #else
       //long * refPtr = Kokkos::Experimental::EmuReplicatedSpace::getRefAddr();
 #if defined(KOKKOS_ENABLE_EMU)
@@ -141,7 +142,6 @@ private:
 		   }
          }
        }
-       cilk_sync;
 #else
       //long * refPtr = Kokkos::Experimental::EmuReplicatedSpace::getRefAddr();
 #if defined(KOKKOS_ENABLE_EMU)
@@ -576,168 +576,120 @@ private:
   typedef typename Kokkos::Impl::if_c< std::is_same<InvalidType,ReducerType>::value, WorkTag, void>::type WorkTagFwd;
 
   typedef FunctorAnalysis< FunctorPatternInterface::REDUCE , Policy , FunctorType > Analysis ;
-  typedef Kokkos::Impl::kokkos_cilk_reducer< ReducerTypeFwd, FunctorType, WorkTagFwd > cilk_reducer_wrapper;
+  typedef Kokkos::Impl::kokkos_cilk_reducer< ReducerTypeFwd, FunctorType, typename Analysis::value_type, WorkTagFwd > cilk_reducer_wrapper;
 
   typedef Kokkos::Impl::FunctorValueInit<   ReducerTypeFwd , WorkTagFwd >  ValueInit ;
 
   typedef typename Analysis::pointer_type    pointer_type ;
-  typedef typename Analysis::reference_type    reference_type ;
-  
-  typedef typename cilk_reducer_wrapper::ReducerTypeFwd::value_type reduction_type;
-  
+  typedef typename Analysis::reference_type  reference_type ;
+
   const FunctorType   m_functor ;
   const Policy        m_policy ;
-  const typename Policy::member_type m_policy_len;
-  const typename Policy::member_type m_policy_par_loop;
-  const typename Policy::member_type m_policy_int_loop;
-  const typename Policy::member_type m_policy_par_size;
   const ReducerType   m_reducer ;
-  const pointer_type  m_result_ptr;
-  const size_t m_reduce_size;
-  const size_t memory_zones = 8;
-  
-  const cilk_reducer_wrapper reducer;
-  
-  // length of the range
-  const typename Policy::member_type get_policy_len() const {
-      const typename Policy::member_type e = m_policy.end();
-      const typename Policy::member_type b = m_policy.begin();
-      return (e-b);
-  }
-  
-  // number of threads
-  const typename Policy::member_type get_policy_par_loop() const {
-	  return (m_policy_len > MAX_THREAD_COUNT ? MAX_THREAD_COUNT : m_policy_len);
-  }
-  
-  // internal loop per thread
-  const typename Policy::member_type get_policy_int_loop() const {      
-      if ( m_policy_par_loop > 0 )
-          return ((m_policy_len / m_policy_par_loop) + ( ( (m_policy_len % m_policy_par_loop) == 0) ? 0 : 1 ));
-      else 
-          return 1;
-  }
-  
-  // depth of working strided memory
-  const typename Policy::member_type get_policy_par_size() const { 
-      if ( m_policy_par_loop > 0 )
-	     return ((m_policy_par_loop/memory_zones) + 
-	             ( ( (m_policy_par_loop % memory_zones) == 0) ? 0 : 1) );
-	  else
-	     return 1;
-  }
-  
-  const size_t get_reduce_size(FunctorType func_, ReducerType red_) {
-        return Analysis::value_size( ReducerConditional::select(func_ , red_) );
-  }
-
+  const pointer_type  m_result_ptr ;
 
   template< class TagType >
   inline
   typename std::enable_if< std::is_same< TagType , void >::value >::type
-  internal_reduce(const typename Policy::member_type b, const typename Policy::member_type e, 
-                  int i, const size_t l_alloc_size, int nl_) const {
-     
-         for ( typename Policy::member_type j = (b + (m_policy_int_loop * i)); j < (b + ( (m_policy_int_loop * i) + m_policy_int_loop)); j++ ) {
-           if (j < e) {
-              reduction_type lupdate;     
-	      reducer.init(lupdate);
-              reducer.f( (const typename Policy::member_type)j , lupdate );
-              reducer.join( lupdate );
-           }
-        }
-  }
-  
-
-  template< class TagType >
-  inline
-  typename std::enable_if< ! std::is_same< TagType , void >::value >::type
-  internal_reduce(const typename Policy::member_type b, const typename Policy::member_type e, 
-                  int i, const size_t l_alloc_size, int nl_) const {
-	 const TagType t{} ;
-     
-         for ( typename Policy::member_type j = (b+(m_policy_int_loop * i)); j < (b+( (m_policy_int_loop * i) + m_policy_int_loop)); j++ ) {
-            if (j < e) { 
-               reduction_type lupdate;          
-	       reducer.init(lupdate);	   
-               reducer.f( t, (const typename Policy::member_type)j , lupdate );
-               reducer.join( lupdate );
-            }
-         }
-  }
-
-  template< class TagType >
-  inline
-  typename std::enable_if< std::is_same< TagType , void >::value >::type
-  exec( reference_type update ) const
-    {      
-      const int nl_ = 8;
+  exec( reference_type update, const size_t l_alloc_bytes ) const
+    {
+      Kokkos::HostSpace space;
       const typename Policy::member_type e = m_policy.end();
-      const typename Policy::member_type b = m_policy.begin();
-               
-      for (int i = 0; i < m_policy_par_loop; i++) {
- 	     int node_ = i % nl_;
-         cilk_spawn this->template internal_reduce<TagType>(b, e, i, m_reduce_size * m_policy_par_size, nl_);
+      cilk_reducer_wrapper cilk_reducer(ReducerConditional::select(m_functor , m_reducer), l_alloc_bytes);
+      global_reducer = (void*)&cilk_reducer;
+      INITIALIZE_CILK_REDUCER( cilk_reducer_wrapper, cilk_reducer )
+      size_t working_set = l_alloc_bytes * (m_policy.end() - m_policy.begin());
+      void * w_ptr = NULL; 
+      if (working_set > 0) {      
+//         printf("calling alloc: %d \n", working_set);
+         w_ptr = space.allocate( working_set );
+         memset( w_ptr, 0, working_set );
       }
-      cilk_sync;
-         
-      reducer.update_value(update);
-      reducer.release_resources();
-         
-  }
+
+      cilk_for ( typename Policy::member_type i = m_policy.begin() ; i < e ; ++i ) {
+         if (w_ptr != NULL) {
+            void * const l_ptr = (void*)(((char*)w_ptr)+((i - m_policy.begin()) * l_alloc_bytes));
+            reference_type lupdate = ValueInit::init(  ReducerConditional::select(m_functor , m_reducer) , l_ptr );
+            m_functor( i , lupdate );
+            cilk_reducer.join( lupdate );
+         }
+      }
+      cilk_reducer.update_value(update);
+      cilk_reducer.release_resources();
+      global_reducer = NULL;
+      if (w_ptr != NULL) {
+         // printf("freeing memory: %d \n", working_set);
+          space.deallocate(w_ptr, working_set);
+      }
+    }
 
   template< class TagType >
   inline
   typename std::enable_if< ! std::is_same< TagType , void >::value >::type
-  exec( reference_type update ) const
-  {      
-      const int nl_ = 8;
-      const typename Policy::member_type e = m_policy.end();
-      const typename Policy::member_type b = m_policy.begin();
+  exec( reference_type update, const size_t l_alloc_bytes ) const
+    {
+      const TagType t{} ;
 
-	  for (int i = 0; i < m_policy_par_loop; i++) {
-		 int node_ = i % nl_;
-		 cilk_spawn this->template internal_reduce<TagType>(b, e, i, m_reduce_size*m_policy_par_size, nl_);
-	  }
-	  cilk_sync;
-	 
-	  reducer.update_value(update);
-          reducer.release_resources();
-	 
-   }
+      Kokkos::HostSpace space;
+      const typename Policy::member_type e = m_policy.end();
+      cilk_reducer_wrapper cilk_reducer(ReducerConditional::select(m_functor , m_reducer), l_alloc_bytes);
+      global_reducer = (void*)&cilk_reducer;
+      INITIALIZE_CILK_REDUCER( cilk_reducer_wrapper, cilk_reducer )
+      size_t working_set = l_alloc_bytes * (m_policy.end() - m_policy.begin());
+      void * w_ptr = NULL; 
+      if (working_set > 0) {      
+         //printf("calling alloc: %d \n", working_set);
+         w_ptr = space.allocate( working_set );
+         memset( w_ptr, 0, working_set );
+      }
+//      printf("calling CILK for with type: %d \n", cilk_reducer.kr.__cilkrts_hyperbase.__view_size);
+      cilk_for ( typename Policy::member_type i = m_policy.begin() ; i < e ; ++i ) {
+         if (w_ptr != NULL) {
+            void * const l_ptr = (void*)(((char*)w_ptr)+((i - m_policy.begin()) * l_alloc_bytes));
+            reference_type lupdate = ValueInit::init(  ReducerConditional::select(m_functor , m_reducer) , l_ptr );
+            m_functor( t, i , lupdate );
+            cilk_reducer.join( lupdate );
+         } 
+      }
+      cilk_reducer.update_value( update );
+      cilk_reducer.release_resources();
+      global_reducer = NULL;
+      if (w_ptr != NULL) {
+          //printf("freeing memory: %d \n", working_set);
+          space.deallocate(w_ptr, working_set);
+      }
+    }
 
 public:
 
   inline
   void execute() const
     {
-      
+
+      const size_t pool_reduce_size =
+        Analysis::value_size( ReducerConditional::select(m_functor , m_reducer) );
       const size_t team_reduce_size  = 0 ; // Never shrinks
       const size_t team_shared_size  = 0 ; // Never shrinks
       const size_t thread_local_size = 0 ; // Never shrinks
 
-      serial_resize_thread_team_data( m_reduce_size
+      serial_resize_thread_team_data( pool_reduce_size
                                     , team_reduce_size
                                     , team_shared_size
                                     , thread_local_size );
 
       HostThreadTeamData & data = *serial_get_thread_team_data();
 
-      //printf("Parallel reduce exec s = %d pl = %d, il = %d, ps = %d \n", m_policy_len, 
-      //       m_policy_par_loop, m_policy_int_loop, m_policy_par_size);
-      //fflush(stdout);
       pointer_type ptr =
         m_result_ptr ? m_result_ptr : pointer_type(data.pool_reduce_local());
 
       reference_type update =
         ValueInit::init(  ReducerConditional::select(m_functor , m_reducer) , ptr );
-        
-      if ( m_policy_par_size > 0 ) {
-         this-> template exec< WorkTag >( update );
 
-         Kokkos::Impl::FunctorFinal< ReducerTypeFwd , WorkTagFwd >::
-           final(  ReducerConditional::select(m_functor , m_reducer) , ptr );
-	   }
+      this-> template exec< WorkTag >( update, pool_reduce_size );
+
+      Kokkos::Impl::FunctorFinal< ReducerTypeFwd , WorkTagFwd >::
+        final(  ReducerConditional::select(m_functor , m_reducer) , ptr );
+
 
     }
 
@@ -751,13 +703,8 @@ public:
                   ,void*>::type = NULL)
     : m_functor( arg_functor )
     , m_policy( arg_policy )
-    , m_policy_len( get_policy_len() )
-    , m_policy_par_loop( get_policy_par_loop() )
-    , m_policy_int_loop( get_policy_int_loop() )
-    , m_policy_par_size( get_policy_par_size() )
     , m_reducer( InvalidType() )
     , m_result_ptr( arg_result_view.data() )
-    , m_reduce_size( get_reduce_size( m_functor, m_reducer ) )
     {
       static_assert( Kokkos::is_view< HostViewType >::value
         , "Kokkos::Experimental::CilkPlus reduce result must be a View" );
@@ -771,13 +718,8 @@ public:
                 , const ReducerType& reducer )
     : m_functor( arg_functor )
     , m_policy(  arg_policy )
-    , m_policy_len( get_policy_len() )
-    , m_policy_par_loop( get_policy_par_loop() )
-    , m_policy_int_loop( get_policy_int_loop() )
-    , m_policy_par_size( get_policy_par_size() )    
     , m_reducer( reducer )
     , m_result_ptr(  reducer.view().data() )
-    , m_reduce_size( get_reduce_size( m_functor, m_reducer ) )
     {
     }
 };
