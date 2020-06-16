@@ -3,6 +3,17 @@
 KOKKOS_DEVICE_OPTION(CILKPLUS ON DEVICE "Enable CilkPlus backend")
 SET(KOKKOS_CILKPLUS_NAME Experimental::CilkPlus)
 
+KOKKOS_ARCH_OPTION(EMU             HOST "Emu Technologies")
+KOKKOS_ARCH_OPTION(EMU_X86         HOST "Emu Technologies on x86")
+
+if (KOKKOS_ARCH_EMU_X86)
+   KOKKOS_ENABLE_OPTION(EMU ON BOOLEAN "Enable Emu")
+   KOKKOS_OPTION(EMU_X86 ON BOOLEAN "Enable Emu on x86")
+endif()
+if (KOKKOS_ARCH_EMU_X86)
+   KOKKOS_ENABLE_OPTION(EMU ON BOOLEAN "Enable Emu")
+endif()
+
 ##SET(Kokkos_DEFAULT_HOST_PARALLEL_EXECUTION_SPACE Experimental::CilkPlus CACHE STRING "Override default host parallel execution space")
 SET(KOKKOS_CILKPLUS_FEATURE_LEVEL 9)
 
