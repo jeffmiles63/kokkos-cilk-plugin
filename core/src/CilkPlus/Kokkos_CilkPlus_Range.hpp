@@ -7,14 +7,15 @@
 #ifdef KOKKOS_ENABLE_EMU
    #include<CilkPlus/Kokkos_CilkEmu_Reduce.hpp>
    #include <emu_c_utils/emu_c_utils.h>
+   #define MAX_THREAD_COUNT 32
 #else
    // use cilk_for
    #define KOKKOS_CILK_USE_PARALLEL_FOR
    #include<CilkPlus/Kokkos_CilkPlus_Reduce.hpp>
+   #define MAX_THREAD_COUNT 256
 #endif
 //Replace specific Emu headers with the tools header to allow x86 compilation
 
-#define MAX_THREAD_COUNT 32
 /*--------------------------------------------------------------------------*/
 /*--------------------------------------------------------------------------*/
 /* Parallel patterns for Kokkos::Experimental::CilkPlus with RangePolicy */
@@ -90,7 +91,7 @@ private:
           int_loop = (len / par_loop) + ( ( (len % par_loop) == 0) ? 0 : 1 );
       
 #ifdef KOKKOS_CILK_USE_PARALLEL_FOR
-      //printf(" cilk parallel for: b= %d, e = %d, l = %d, par = %d, int = %d \n", b, e, len, par_loop, int_loop);
+      // printf(" cilk parallel for: b= %d, e = %d, l = %d, par = %d, int = %d \n", b, e, len, par_loop, int_loop);
       cilk_for (typename Policy::member_type i = 0 ; i < par_loop ; ++i ) {
          for ( typename Policy::member_type j = (int_loop * i); j < ( (int_loop * i) + int_loop); j++ ) {
            if (j < e) {

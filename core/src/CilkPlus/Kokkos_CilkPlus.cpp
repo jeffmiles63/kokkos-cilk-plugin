@@ -219,6 +219,25 @@ const char* CilkPlus::name() { return "CilkPlus"; }
 
 } // namespace Experimental
 	
+namespace Impl {
+
+CilkPlusBackendSpaceFactory g_cilkplus_backend_initializer;
+
+CilkPlusBackendSpaceFactory::CilkPlusBackendSpaceFactory() {
+   BackendInitializer::get_instance().register_backend("200_CilkPlus", this);
+}
+
+void CilkPlusBackendSpaceFactory::initialize(const InitArguments& args) {
+  // Prevent "unused variable" warning for 'args' input struct.  If
+  // Serial::initialize() ever needs to take arguments from the input
+  // struct, you may remove this line of code.
+  (void)args;
+
+  // Always initialize Serial if it is configure time enabled
+  Kokkos::Experimental::CilkPlus::impl_initialize();
+}
+
+}  // namespace Impl
 } // namespace Kokkos
 
 #else

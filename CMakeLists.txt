@@ -15,5 +15,6 @@ if (KOKKOS_ARCH_EMU_X86)
 endif()
 
 ##SET(Kokkos_DEFAULT_HOST_PARALLEL_EXECUTION_SPACE Experimental::CilkPlus CACHE STRING "Override default host parallel execution space")
+LIST(APPEND DEVICE_SETUP_LIST CilkPlus)
 SET(KOKKOS_CILKPLUS_FEATURE_LEVEL 9)
 

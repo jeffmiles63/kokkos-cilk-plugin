@@ -180,15 +180,27 @@ public:
   //--------------------------------------------------------------------------
 };
 }
-namespace Profiling {
+
+
+namespace Impl {
+
+class CilkPlusBackendSpaceFactory : public ExecSpaceFactoryBase {
+public:
+   CilkPlusBackendSpaceFactory();
+   void initialize(const InitArguments& args);
+};
+
+}  // namespace Impl
+
+namespace Tools {
 namespace Experimental {
 template <>
-struct DeviceTypeTraits<Kokkos::Experimental::CilkPlus> {
-  static constexpr Kokkos::Profiling::Experimental::DeviceType id = 
-          Kokkos::Profiling::Experimental::DeviceType::Unknown;
+struct DeviceTypeTraits<::Kokkos::Experimental::CilkPlus> {
+  static constexpr DeviceType id = 
+        ::Kokkos::Profiling::Experimental::DeviceType::Unknown;
 };
 }  // namespace Experimental
-}  // namespace Profiling
+}  // namespace Tools
 } // namespace Kokkos
 
 
