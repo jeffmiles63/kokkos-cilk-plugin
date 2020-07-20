@@ -1,14 +1,14 @@
 find_path(_emu_root
-          NAMES include/x86/memory_web.hh
+          NAMES x86/include/emu_c_utils/memoryweb_x86.h
           HINTS $ENV{EMU_ROOT} $ENV{EMU_DIR} ${EMU_ROOT} ${EMU_DIR}
           )
 
 find_library(_emu_lib
-             NAMES lib.a
+             NAMES libemu_c_utils.a
              HINTS ${_emu_root}/lib ${_emu_root}/lib64)
 
 find_path(_emu_include_dir
-          NAMES shmemx.h
+          NAMES memoryweb.h
           HINTS ${_emu_root}/include)
 
 if ((NOT ${_emu_root})
@@ -24,8 +24,8 @@ find_package_handle_standard_args(EMU ${_fail_msg}
                                   _emu_include_dir
                                   )
 
-add_library(EMU::EMU UNKNOWN IMPORTED)
-set_target_properties(EMU::EMU PROPERTIES
+add_library(EMU::emu UNKNOWN IMPORTED)
+set_target_properties(EMU::emu PROPERTIES
                       IMPORTED_LOCATION ${_emu_lib}
                       INTERFACE_INCLUDE_DIRECTORIES ${_emu_include_dir}
                       )
